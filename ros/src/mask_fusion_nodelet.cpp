@@ -8,19 +8,22 @@
 #include <boost/assign.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <jsk_topic_tools/log_utils.h>
 #include <octomap/CountingOcTree.h>
 #include <opencv2/opencv.hpp>
 #include <pcl/io/pcd_io.h>
+#include <pcl/ros/conversions.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <pluginlib/class_list_macros.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
-// #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/image_encodings.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
-#include "label_fusion/mask_fusion_nodelet.h"
-#include "ros/ros.h"
+#include "label_fusion_ros/mask_fusion_nodelet.h"
+// #include "ros/ros.h"
 #include "utils.hpp"
 
 
@@ -36,7 +39,7 @@ namespace label_fusion {
     pnh_->param("threshold", threshold_, 0.95);
     pnh_->param("ksize", ksize_, 10);
     // pub_depth_ = advertise<sensor_msgs::Image>(*pnh_, "output/depth", 1);
-    pub_cloud_ = advertise<sensor_msgs::PointCloud2>(*pnh_, "output/cloud", 1);
+    pub_cloud_ = advertise<sensor_msgs::PointCloud2>(*pnh_, "output", 1);
     int n_views = 0;
     double resolution = (double)resolution_;
     double threshold = (double)threshold_;
@@ -51,14 +54,14 @@ namespace label_fusion {
     if (use_depth_) {
       sub_depth_.subscribe(*pnh_, "input/depth", 1);
       if (approximate_sync_) {
-        async_ = boost::make_shared<message_filters::Synchronizer<ApproximateSyncPolicy> >(queue_size_);
-        async_->connectInput(sub_mask_, sub_info_, sub_transform_, sub_depth_);
-        async_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3, _4));
+        async_depth_ = boost::make_shared<message_filters::Synchronizer<ApproximateSyncPolicyWithDepth> >(queue_size_);
+        async_depth_->connectInput(sub_mask_, sub_info_, sub_transform_, sub_depth_);
+        async_depth_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3, _4));
       }
       else {
-        sync_ = boost::make_shared<message_filters::Synchronizer<SyncPolicy> >(queue_size_);
-        sync_->connectInput(sub_mask_, sub_info, sub_transform_, sub_depth_);
-        sync_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3, _4));
+        sync_depth_ = boost::make_shared<message_filters::Synchronizer<SyncPolicyWithDepth> >(queue_size_);
+        sync_depth_->connectInput(sub_mask_, sub_info_, sub_transform_, sub_depth_);
+        sync_depth_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3, _4));
       }
     }
     else {
@@ -108,12 +111,17 @@ namespace label_fusion {
     octomap::CountingOcTree octree(/*resolution=*/resolution);
 
     // cam_info: intrinsic parameter of color camera
-    Eigen::Matrix3f cam_K = info_msg->K;
+    Eigen::Matrix3f cam_K;
+    cam_K <<
+      info_msg->K[0], info_msg->K[1], info_msg->K[2],
+      info_msg->K[3], info_msg->K[4], info_msg->K[5],
+      info_msg->K[6], info_msg->K[7], info_msg->K[8];
     // std::string cam_K_file = data_path + "/camera-intrinsics.color.txt";
     // Eigen::Matrix3f cam_K = utils::loadMatrixFromFile(cam_K_file, 3, 3);
     // std::cout << "cam_K" << std::endl << cam_K << std::endl << std::endl;
 
     pcl::PointCloud<pcl::PointXYZRGB> cloud;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
     for (int frame_idx = 0; frame_idx < n_views; frame_idx++) {
       // std::ostringstream curr_frame_prefix;
       // curr_frame_prefix << std::setw(6) << std::setfill('0') << frame_idx;
@@ -128,7 +136,7 @@ namespace label_fusion {
       if (use_depth_) {
         // std::string depth_file = data_path + "/frame-" + curr_frame_prefix.str() + ".depth.png";
         // depth = utils::loadDepthFile(depth_file);
-        depth = cv::bridge::toCvShare(depth_msg, depth_msg->encoding)->image;
+        depth = cv_bridge::toCvShare(depth_msg, depth_msg->encoding)->image;
         // cv::Mat depth_viz = utils::colorizeDepth(depth);
         // cv::imshow("depth_viz", depth_viz);
         // cv::waitKey(0);
@@ -172,7 +180,8 @@ namespace label_fusion {
       pt.x = origin(0);
       pt.y = origin(1);
       pt.z = origin(2);
-      cloud.push_back(pt);
+      // cloud.push_back(pt);
+      cloud_ptr->points.push_back(pt);
 
       octomap::KeySet occupied_cells;
       octomap::KeySet unoccupied_cells;
@@ -205,7 +214,8 @@ namespace label_fusion {
           pt.y = direction_far(1);
           pt.z = direction_far(2);
 #pragma omp critical
-          cloud.push_back(pt);
+          // cloud.push_back(pt);
+          cloud_ptr->points.push_back(pt);
 
           octomap::point3d pt_origin(origin(0), origin(1), origin(2));
           octomap::point3d pt_direction(direction(0), direction(1), direction(2));
@@ -226,11 +236,11 @@ namespace label_fusion {
         }
       }
       for (octomap::KeySet::iterator it = unoccupied_cells.begin(), end = unoccupied_cells.end(); it != end; ++it) {
-        octree.updateNode(*it, /*hit=*/false, /*reset=*/true);
+        octree.updateNode(*it/*, false, true*/); // hit=false, reset=true ?
       }
       for (octomap::KeySet::iterator it = occupied_cells.begin(), end = occupied_cells.end(); it != end; ++it) {
         if (unoccupied_cells.find(*it) == unoccupied_cells.end()) {
-          octree.updateNode(*it, /*hit=*/true);
+          octree.updateNode(*it/*, true*/); // hit=true ?
         }
       }
     }
@@ -243,10 +253,11 @@ namespace label_fusion {
       pt.x = (*it).x();
       pt.y = (*it).y();
       pt.z = (*it).z();
-      cloud.push_back(pt);
+      // cloud.push_back(pt);
+      cloud_ptr->points.push_back(pt);
     }
     sensor_msgs::PointCloud2 output_cloud_msg;
-    pcl::toROSMsg(cloud, output_cloud_msg);
+    pcl::toROSMsg(*cloud_ptr, output_cloud_msg);
     pub_cloud_.publish(output_cloud_msg);
     // std::string out_file("mask_fusion.pcd");
     // pcl::io::savePCDFile(out_file, cloud);
