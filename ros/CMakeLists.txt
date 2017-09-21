@@ -22,14 +22,14 @@ if(OPENMP_FOUND)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 add_definitions("-g -O2")
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -z defs")
-endif()
+#if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+#  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -z defs")
+#endif()
 
 find_package(PCL REQUIRED COMPONENTS io)
 
 find_package(octomap REQUIRED)
-add_definitions(-DOCTOMAP_NODEBUGOUT)
+#add_definitions(-DOCTOMAP_NODEBUGOUT)
 
 ################################################
 ## Declare ROS messages, services and actions ##
@@ -69,8 +69,9 @@ add_library(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME}
+  # ${OCTOMAP_LIBRARIES}
   ${catkin_LIBRARIES}
-  ${OCTOMAP_LIBRARIES}
+  ${PCL_LIBRARIES}
 )
 
 #############
