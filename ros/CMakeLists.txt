@@ -58,10 +58,10 @@ catkin_package(
 
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS}
   ${OCTOMAP_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${catkin_INCLUDE_DIRS}
 )
 
 add_library(${PROJECT_NAME}
@@ -69,7 +69,7 @@ add_library(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME}
-  # ${OCTOMAP_LIBRARIES}
+  ${OCTOMAP_LIBRARIES}
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )
