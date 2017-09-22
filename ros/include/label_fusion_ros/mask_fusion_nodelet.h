@@ -1,5 +1,5 @@
-#ifndef LABEL_FUSION_MASK_FUSION_NODELET_H_
-#define LABEL_FUSION_MASK_FUSION_NODELET_H_
+#ifndef LABEL_FUSION_ROS_MASK_FUSION_NODELET_H_
+#define LABEL_FUSION_ROS_MASK_FUSION_NODELET_H_
 
 #include <geometry_msgs/TransformStamped.h>
 #include <jsk_topic_tools/diagnostic_nodelet.h>
@@ -11,7 +11,7 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud2.h>
 
-namespace label_fusion
+namespace label_fusion_ros
 {
 
   class MaskFusion: public jsk_topic_tools::DiagnosticNodelet
@@ -80,6 +80,6 @@ namespace label_fusion
   private:
   };
 
-}  // namespace label_fusion
+}  // namespace label_fusion_ros
 
-#endif // LABEL_FUSION_MASK_FUSION_NODELET_H_
+#endif // LABEL_FUSION_ROS_MASK_FUSION_NODELET_H_

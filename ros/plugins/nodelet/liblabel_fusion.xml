@@ -1,6 +1,0 @@
-<library path="lib/liblabel_fusion">
-  <class name="label_fusion/MaskFusion"
-         type="label_fusion::MaskFusion"
-         base_class_type="nodelet::Nodelet">
-  </class>
-</library>

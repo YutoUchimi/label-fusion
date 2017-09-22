@@ -27,7 +27,7 @@
 #include "utils.hpp"
 
 
-namespace label_fusion {
+namespace label_fusion_ros {
 
   void MaskFusion::onInit() {
     DiagnosticNodelet::onInit();
@@ -264,6 +264,6 @@ namespace label_fusion {
     // std::cout << "Wrote mask fusion result to: " << out_file << std::endl;
   }
 
-} // namespace label_fusion
+} // namespace label_fusion_ros
 
-PLUGINLIB_EXPORT_CLASS(label_fusion::MaskFusion, nodelet::Nodelet);
+PLUGINLIB_EXPORT_CLASS(label_fusion_ros::MaskFusion, nodelet::Nodelet);

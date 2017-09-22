@@ -45,6 +45,6 @@
   <run_depend>sensor_msgs</run_depend>
 
   <export>
-    <nodelet plugin="${prefix}/plugins/nodelet/liblabel_fusion.xml"/>
+    <nodelet plugin="${prefix}/plugins/nodelet/liblabel_fusion_ros.xml"/>
   </export>
 </package>
