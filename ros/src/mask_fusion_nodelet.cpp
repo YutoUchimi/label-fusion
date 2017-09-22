@@ -236,11 +236,11 @@ namespace label_fusion_ros {
         }
       }
       for (octomap::KeySet::iterator it = unoccupied_cells.begin(), end = unoccupied_cells.end(); it != end; ++it) {
-        octree.updateNode(*it/*, false, true*/); // hit=false, reset=true ?
+        octree.updateNode(*it, /*hit=*/false, /*reset=*/true);
       }
       for (octomap::KeySet::iterator it = occupied_cells.begin(), end = occupied_cells.end(); it != end; ++it) {
         if (unoccupied_cells.find(*it) == unoccupied_cells.end()) {
-          octree.updateNode(*it/*, true*/); // hit=true ?
+          octree.updateNode(*it, /*hit=*/true);
         }
       }
     }
