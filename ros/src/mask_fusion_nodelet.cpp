@@ -23,7 +23,6 @@
 #include <Eigen/Geometry>
 
 #include "label_fusion_ros/mask_fusion_nodelet.h"
-// #include "ros/ros.h"
 #include "utils.hpp"
 
 
@@ -41,9 +40,6 @@ namespace label_fusion_ros {
     // pub_depth_ = advertise<sensor_msgs::Image>(*pnh_, "output/depth", 1);
     pub_cloud_ = advertise<sensor_msgs::PointCloud2>(*pnh_, "output", 1);
     int n_views = 0;
-    double resolution = (double)resolution_;
-    double threshold = (double)threshold_;
-    unsigned int ksize = (unsigned int)ksize_;
     onInitPostProcess();
   }
 
@@ -107,6 +103,13 @@ namespace label_fusion_ros {
     else {
       n_views = n_views_;
     }
+    double resolution = (double)resolution_;
+    double threshold = (double)threshold_;
+    int ksize = (int)ksize_;
+    // std::cout << "[MaskFusion] resolution = " << resolution << std::endl;
+    // std::cout << "[MaskFusion] threshold = " << threshold << std::endl;
+    // std::cout << "[MaskFusion] ksize = " << ksize << std::endl;
+    // std::cout << "[MaskFusion] n_views = " << n_views << std::endl << std::endl;
 
     octomap::CountingOcTree octree(/*resolution=*/resolution);
 
@@ -168,7 +171,8 @@ namespace label_fusion_ros {
         0,   0,   0,   1;
       // std::string pose_file = data_path + "/frame-" + curr_frame_prefix.str() + ".pose.txt";
       // Eigen::Matrix4f cam_pose = utils::loadMatrixFromFile(pose_file, 4, 4);
-      // std::cout << "cam_pose" << std::endl << cam_pose << std::endl << std::endl;
+      // std::cout << "frame_idx : " << frame_idx << std::endl;
+      // std::cout << "cam_pose :" << std::endl << cam_pose << std::endl;
 
       // camera origin
       Eigen::Vector4f origin_(0, 0, 0, 1);
@@ -214,8 +218,8 @@ namespace label_fusion_ros {
           pt.y = direction_far(1);
           pt.z = direction_far(2);
 #pragma omp critical
-          // cloud.push_back(pt);
           cloud_ptr->points.push_back(pt);
+          // cloud.push_back(pt);
 
           octomap::point3d pt_origin(origin(0), origin(1), origin(2));
           octomap::point3d pt_direction(direction(0), direction(1), direction(2));
@@ -243,10 +247,11 @@ namespace label_fusion_ros {
           octree.updateNode(*it, /*hit=*/true);
         }
       }
-    }
+    } // for (int frame_idx = 0; ...)
 
     // visualize 3d segmentation
     octomap::point3d_list node_centers;
+    std::cout << "octree : " << octree.size() << std::endl;
     octree.getCentersMinHits(node_centers, static_cast<int>(threshold * n_views));
     for (octomap::point3d_list::iterator it = node_centers.begin(), end = node_centers.end(); it != end; ++it) {
       pcl::PointXYZRGB pt(0, 255, 0);
@@ -258,6 +263,7 @@ namespace label_fusion_ros {
     }
     sensor_msgs::PointCloud2 output_cloud_msg;
     pcl::toROSMsg(*cloud_ptr, output_cloud_msg);
+    output_cloud_msg.header = info_msg->header;
     pub_cloud_.publish(output_cloud_msg);
     // std::string out_file("mask_fusion.pcd");
     // pcl::io::savePCDFile(out_file, cloud);
