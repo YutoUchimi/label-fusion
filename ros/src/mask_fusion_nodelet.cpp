@@ -95,7 +95,6 @@ namespace label_fusion_ros {
                           const sensor_msgs::CameraInfo::ConstPtr& info_msg,
                           const geometry_msgs::TransformStamped::ConstPtr& transform_msg,
                           const sensor_msgs::Image::ConstPtr& depth_msg) {
-    // cv_bridge::CvImagePtr mask_img_ptr = cv_bridge::toCvCopy(mask_msg, sensor_msgs::image_encodings::MONO8);
 
     if (n_views_ < 0) {
       n_views++;
@@ -106,10 +105,6 @@ namespace label_fusion_ros {
     double resolution = (double)resolution_;
     double threshold = (double)threshold_;
     int ksize = (int)ksize_;
-    // std::cout << "[MaskFusion] resolution = " << resolution << std::endl;
-    // std::cout << "[MaskFusion] threshold = " << threshold << std::endl;
-    // std::cout << "[MaskFusion] ksize = " << ksize << std::endl;
-    // std::cout << "[MaskFusion] n_views = " << n_views << std::endl << std::endl;
 
     octomap::CountingOcTree octree(/*resolution=*/resolution);
 
@@ -119,30 +114,18 @@ namespace label_fusion_ros {
       info_msg->K[0], info_msg->K[1], info_msg->K[2],
       info_msg->K[3], info_msg->K[4], info_msg->K[5],
       info_msg->K[6], info_msg->K[7], info_msg->K[8];
-    // std::string cam_K_file = data_path + "/camera-intrinsics.color.txt";
-    // Eigen::Matrix3f cam_K = utils::loadMatrixFromFile(cam_K_file, 3, 3);
     // std::cout << "cam_K" << std::endl << cam_K << std::endl << std::endl;
 
     pcl::PointCloud<pcl::PointXYZRGB> cloud;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
     for (int frame_idx = 0; frame_idx < n_views; frame_idx++) {
-      // std::ostringstream curr_frame_prefix;
-      // curr_frame_prefix << std::setw(6) << std::setfill('0') << frame_idx;
-      // std::cout << "frame-" + curr_frame_prefix.str() << std::endl << std::endl;
 
       // mask file
       cv::Mat mask = cv_bridge::toCvShare(mask_msg, "mono8")->image;
-      // std::string mask_file = data_path + "/frame-" + curr_frame_prefix.str() + ".mask.png";
-      // cv::Mat mask = cv::imread(mask_file, 0);
 
       cv::Mat depth;
       if (use_depth_) {
-        // std::string depth_file = data_path + "/frame-" + curr_frame_prefix.str() + ".depth.png";
-        // depth = utils::loadDepthFile(depth_file);
         depth = cv_bridge::toCvShare(depth_msg, depth_msg->encoding)->image;
-        // cv::Mat depth_viz = utils::colorizeDepth(depth);
-        // cv::imshow("depth_viz", depth_viz);
-        // cv::waitKey(0);
       }
 
       // pose: world -> camera
@@ -169,8 +152,6 @@ namespace label_fusion_ros {
         r10, r11, r12, ty,
         r20, r21, r22, tz,
         0,   0,   0,   1;
-      // std::string pose_file = data_path + "/frame-" + curr_frame_prefix.str() + ".pose.txt";
-      // Eigen::Matrix4f cam_pose = utils::loadMatrixFromFile(pose_file, 4, 4);
       // std::cout << "frame_idx : " << frame_idx << std::endl;
       // std::cout << "cam_pose :" << std::endl << cam_pose << std::endl;
 
@@ -184,7 +165,6 @@ namespace label_fusion_ros {
       pt.x = origin(0);
       pt.y = origin(1);
       pt.z = origin(2);
-      // cloud.push_back(pt);
       cloud_ptr->points.push_back(pt);
 
       octomap::KeySet occupied_cells;
@@ -219,7 +199,6 @@ namespace label_fusion_ros {
           pt.z = direction_far(2);
 #pragma omp critical
           cloud_ptr->points.push_back(pt);
-          // cloud.push_back(pt);
 
           octomap::point3d pt_origin(origin(0), origin(1), origin(2));
           octomap::point3d pt_direction(direction(0), direction(1), direction(2));
@@ -258,16 +237,12 @@ namespace label_fusion_ros {
       pt.x = (*it).x();
       pt.y = (*it).y();
       pt.z = (*it).z();
-      // cloud.push_back(pt);
       cloud_ptr->points.push_back(pt);
     }
     sensor_msgs::PointCloud2 output_cloud_msg;
     pcl::toROSMsg(*cloud_ptr, output_cloud_msg);
     output_cloud_msg.header = info_msg->header;
     pub_cloud_.publish(output_cloud_msg);
-    // std::string out_file("mask_fusion.pcd");
-    // pcl::io::savePCDFile(out_file, cloud);
-    // std::cout << "Wrote mask fusion result to: " << out_file << std::endl;
   }
 
 } // namespace label_fusion_ros
