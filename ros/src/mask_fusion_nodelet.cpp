@@ -230,8 +230,10 @@ namespace label_fusion_ros {
 
     // visualize 3d segmentation
     octomap::point3d_list node_centers;
-    std::cout << "octree : " << octree.size() << std::endl;
-    octree.getCentersMinHits(node_centers, static_cast<int>(threshold * n_views));
+    // ROS_INFO("[MaskFusion] octree.size : %zu", octree.size());
+    if (octree.size() != 0) {
+      octree.getCentersMinHits(node_centers, static_cast<int>(threshold * n_views));
+    }
     for (octomap::point3d_list::iterator it = node_centers.begin(), end = node_centers.end(); it != end; ++it) {
       pcl::PointXYZRGB pt(0, 255, 0);
       pt.x = (*it).x();
