@@ -139,13 +139,13 @@ namespace label_fusion_ros {
       float rz = transform_msg->transform.rotation.z;
       float rw = transform_msg->transform.rotation.w;
       float r00 = 1 - 2*ry*ry - 2*rz*rz;
-      float r01 = 2*rx*ry + 2*rz*rw;
-      float r02 = 2*rx*rz - 2*ry*rw;
-      float r10 = 2*rx*ry - 2*rz*rw;
+      float r01 = 2*rx*ry - 2*rz*rw;
+      float r02 = 2*rx*rz + 2*ry*rw;
+      float r10 = 2*rx*ry + 2*rz*rw;
       float r11 = 1 - 2*rx*rx - 2*rz*rz;
-      float r12 = 2*ry*rz + 2*rw*rx;
-      float r20 = 2*rx*rz + 2*ry*rw;
-      float r21 = 2*ry*rz - 2*rw*rx;
+      float r12 = 2*ry*rz - 2*rw*rx;
+      float r20 = 2*rx*rz - 2*ry*rw;
+      float r21 = 2*ry*rz + 2*rw*rx;
       float r22 = 1 - 2*rx*rx - 2*ry*ry;
       Eigen::Matrix4f cam_pose;
       cam_pose <<
