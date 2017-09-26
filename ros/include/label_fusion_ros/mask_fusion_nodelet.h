@@ -66,6 +66,7 @@ namespace label_fusion_ros
     // ros::Subscriber sub_depth_;
     ros::Publisher pub_cloud_;
 
+    std::string frame_id_;
     bool approximate_sync_;
     int queue_size_;
     bool use_depth_;

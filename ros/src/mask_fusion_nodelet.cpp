@@ -30,6 +30,7 @@ namespace label_fusion_ros {
 
   void MaskFusion::onInit() {
     DiagnosticNodelet::onInit();
+    pnh_->param<std::string>("frame_id", frame_id_, "map");
     pnh_->param("approximate_sync", approximate_sync_, true);
     pnh_->param("queue_size", queue_size_, 10);
     pnh_->param("use_depth", use_depth_, false);
@@ -243,7 +244,7 @@ namespace label_fusion_ros {
     }
     sensor_msgs::PointCloud2 output_cloud_msg;
     pcl::toROSMsg(*cloud_ptr, output_cloud_msg);
-    output_cloud_msg.header = info_msg->header;
+    output_cloud_msg.header.frame_id = frame_id_;
     pub_cloud_.publish(output_cloud_msg);
   }
 
