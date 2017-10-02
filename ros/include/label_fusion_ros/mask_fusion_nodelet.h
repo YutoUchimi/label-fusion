@@ -7,9 +7,13 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/exact_time.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <octomap/CountingOcTree.h>
+#include <pcl/io/pcd_io.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud2.h>
+
+#include "utils.hpp"
 
 namespace label_fusion_ros
 {
@@ -60,10 +64,6 @@ namespace label_fusion_ros
     message_filters::Subscriber<geometry_msgs::TransformStamped> sub_transform_;
     message_filters::Subscriber<sensor_msgs::Image> sub_depth_;
 
-    // ros::Subscriber sub_mask_;
-    // ros::Subscriber sub_info_;
-    // ros::Subscriber sub_transform_;
-    // ros::Subscriber sub_depth_;
     ros::Publisher pub_cloud_;
 
     std::string frame_id_;
@@ -78,6 +78,10 @@ namespace label_fusion_ros
     double resolution;
     double threshold;
     int ksize;
+
+    pcl::PointCloud<pcl::PointXYZRGB> cloud;
+    octomap::CountingOcTree* octree;
+
   private:
   };
 

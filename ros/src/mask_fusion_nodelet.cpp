@@ -23,7 +23,6 @@
 #include <Eigen/Geometry>
 
 #include "label_fusion_ros/mask_fusion_nodelet.h"
-#include "utils.hpp"
 
 
 namespace label_fusion_ros {
@@ -41,6 +40,12 @@ namespace label_fusion_ros {
     // pub_depth_ = advertise<sensor_msgs::Image>(*pnh_, "output/depth", 1);
     pub_cloud_ = advertise<sensor_msgs::PointCloud2>(*pnh_, "output", 1);
     int n_views = 0;
+    double resolution = (double)resolution_;
+    double threshold = (double)threshold_;
+    int ksize = (int)ksize_;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud;
+    //octomap::CountingOcTree octree(/*resolution=*/resolution);
+    octree = new octomap::CountingOcTree(resolution);
     onInitPostProcess();
   }
 
@@ -84,6 +89,7 @@ namespace label_fusion_ros {
     if (use_depth_) {
       sub_depth_.unsubscribe();
     }
+    delete octree;
   }
 
   void MaskFusion::fusion(const sensor_msgs::Image::ConstPtr& mask_msg,
@@ -103,11 +109,10 @@ namespace label_fusion_ros {
     else {
       n_views = n_views_;
     }
-    double resolution = (double)resolution_;
-    double threshold = (double)threshold_;
-    int ksize = (int)ksize_;
 
-    octomap::CountingOcTree octree(/*resolution=*/resolution);
+    // octomap::CountingOcTree octree(/*resolution=*/resolution);
+    ROS_INFO("[MaskFusion] octree                  : %p", octree);
+    ROS_INFO("[MaskFusion] octree->getResolution() : %f", octree->getResolution());
 
     // cam_info: intrinsic parameter of color camera
     Eigen::Matrix3f cam_K;
@@ -117,9 +122,9 @@ namespace label_fusion_ros {
       info_msg->K[6], info_msg->K[7], info_msg->K[8];
     // std::cout << "cam_K" << std::endl << cam_K << std::endl << std::endl;
 
-    pcl::PointCloud<pcl::PointXYZRGB> cloud;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGB>());
-    for (int frame_idx = 0; frame_idx < n_views; frame_idx++) {
+    // for (int frame_idx = 0; frame_idx < n_views; frame_idx++) {
+    for (int frame_idx = 0; frame_idx < 1; frame_idx++) {
+      // std::cout << "frame_idx : " << frame_idx << std::endl;
 
       // mask file
       cv::Mat mask = cv_bridge::toCvShare(mask_msg, "mono8")->image;
@@ -166,7 +171,7 @@ namespace label_fusion_ros {
       pt.x = origin(0);
       pt.y = origin(1);
       pt.z = origin(2);
-      cloud_ptr->points.push_back(pt);
+      cloud.push_back(pt);
 
       octomap::KeySet occupied_cells;
       octomap::KeySet unoccupied_cells;
@@ -199,20 +204,20 @@ namespace label_fusion_ros {
           pt.y = direction_far(1);
           pt.z = direction_far(2);
 #pragma omp critical
-          cloud_ptr->points.push_back(pt);
+          cloud.push_back(pt);
 
           octomap::point3d pt_origin(origin(0), origin(1), origin(2));
           octomap::point3d pt_direction(direction(0), direction(1), direction(2));
           octomap::point3d pt_direction_far(direction_far(0), direction_far(1), direction_far(2));
           if (mask.at<unsigned char>(v, u) > 127) {
             octomap::KeyRay key_ray;
-            octree.computeRayKeys(pt_origin, pt_direction_far, key_ray);
+            octree->computeRayKeys(pt_origin, pt_direction_far, key_ray);
 #pragma omp critical
             occupied_cells.insert(key_ray.begin(), key_ray.end());
           }
           if (!std::isnan(d)) {
             octomap::KeyRay key_ray;
-            if (octree.computeRayKeys(pt_origin, pt_direction, key_ray)) {
+            if (octree->computeRayKeys(pt_origin, pt_direction, key_ray)) {
 #pragma omp critical
               unoccupied_cells.insert(key_ray.begin(), key_ray.end());
             }
@@ -220,32 +225,33 @@ namespace label_fusion_ros {
         }
       }
       for (octomap::KeySet::iterator it = unoccupied_cells.begin(), end = unoccupied_cells.end(); it != end; ++it) {
-        octree.updateNode(*it, /*hit=*/false, /*reset=*/true);
+        octree->updateNode(*it, /*hit=*/false, /*reset=*/true);
       }
       for (octomap::KeySet::iterator it = occupied_cells.begin(), end = occupied_cells.end(); it != end; ++it) {
         if (unoccupied_cells.find(*it) == unoccupied_cells.end()) {
-          octree.updateNode(*it, /*hit=*/true);
+          octree->updateNode(*it, /*hit=*/true);
         }
       }
     } // for (int frame_idx = 0; ...)
 
     // visualize 3d segmentation
     octomap::point3d_list node_centers;
-    // ROS_INFO("[MaskFusion] octree.size : %zu", octree.size());
-    if (octree.size() != 0) {
-      octree.getCentersMinHits(node_centers, static_cast<int>(threshold * n_views));
+    ROS_INFO("[MaskFusion] octree->size()          : %zu", octree->size());
+    if (octree->size() != 0) {
+      octree->getCentersMinHits(node_centers, static_cast<int>(threshold * n_views));
     }
     for (octomap::point3d_list::iterator it = node_centers.begin(), end = node_centers.end(); it != end; ++it) {
       pcl::PointXYZRGB pt(0, 255, 0);
       pt.x = (*it).x();
       pt.y = (*it).y();
       pt.z = (*it).z();
-      cloud_ptr->points.push_back(pt);
+      cloud.push_back(pt);
     }
     sensor_msgs::PointCloud2 output_cloud_msg;
-    pcl::toROSMsg(*cloud_ptr, output_cloud_msg);
+    pcl::toROSMsg(cloud, output_cloud_msg);
     output_cloud_msg.header.frame_id = frame_id_;
     pub_cloud_.publish(output_cloud_msg);
+    cloud.clear();
   }
 
 } // namespace label_fusion_ros
