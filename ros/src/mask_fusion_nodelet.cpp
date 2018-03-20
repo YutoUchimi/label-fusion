@@ -1,3 +1,5 @@
+// Copyright (2018) Yuto Uchimi
+
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -33,18 +35,14 @@ namespace label_fusion_ros {
     pnh_->param("approximate_sync", approximate_sync_, true);
     pnh_->param("queue_size", queue_size_, 10);
     pnh_->param("use_depth", use_depth_, false);
-    pnh_->param("n_views", n_views_, -1);
     pnh_->param("resolution", resolution_, 0.01);
     pnh_->param("threshold", threshold_, 0.95);
     pnh_->param("ksize", ksize_, 10);
-    // pub_depth_ = advertise<sensor_msgs::Image>(*pnh_, "output/depth", 1);
     pub_cloud_ = advertise<sensor_msgs::PointCloud2>(*pnh_, "output", 1);
     int n_views = 0;
-    double resolution = (double)resolution_;
-    double threshold = (double)threshold_;
-    int ksize = (int)ksize_;
-    pcl::PointCloud<pcl::PointXYZRGB> cloud;
-    //octomap::CountingOcTree octree(/*resolution=*/resolution);
+    resolution = resolution_;
+    threshold = threshold_;
+    ksize = ksize_;
     octree = new octomap::CountingOcTree(resolution);
     onInitPostProcess();
   }
@@ -59,20 +57,17 @@ namespace label_fusion_ros {
         async_depth_ = boost::make_shared<message_filters::Synchronizer<ApproximateSyncPolicyWithDepth> >(queue_size_);
         async_depth_->connectInput(sub_mask_, sub_info_, sub_transform_, sub_depth_);
         async_depth_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3, _4));
-      }
-      else {
+      } else {
         sync_depth_ = boost::make_shared<message_filters::Synchronizer<SyncPolicyWithDepth> >(queue_size_);
         sync_depth_->connectInput(sub_mask_, sub_info_, sub_transform_, sub_depth_);
         sync_depth_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3, _4));
       }
-    }
-    else {
+    } else {
       if (approximate_sync_) {
         async_ = boost::make_shared<message_filters::Synchronizer<ApproximateSyncPolicy> >(queue_size_);
         async_->connectInput(sub_mask_, sub_info_, sub_transform_);
         async_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3));
-      }
-      else {
+      } else {
         sync_ = boost::make_shared<message_filters::Synchronizer<SyncPolicy> >(queue_size_);
         sync_->connectInput(sub_mask_, sub_info_, sub_transform_);
         sync_->registerCallback(boost::bind(&MaskFusion::fusion, this, _1, _2, _3));
@@ -102,17 +97,7 @@ namespace label_fusion_ros {
                           const sensor_msgs::CameraInfo::ConstPtr& info_msg,
                           const geometry_msgs::TransformStamped::ConstPtr& transform_msg,
                           const sensor_msgs::Image::ConstPtr& depth_msg) {
-
-    if (n_views_ < 0) {
-      n_views++;
-    }
-    else {
-      n_views = n_views_;
-    }
-
-    // octomap::CountingOcTree octree(/*resolution=*/resolution);
-    ROS_INFO("[MaskFusion] octree                  : %p", octree);
-    ROS_INFO("[MaskFusion] octree->getResolution() : %f", octree->getResolution());
+    n_views++;
 
     // cam_info: intrinsic parameter of color camera
     Eigen::Matrix3f cam_K;
@@ -120,140 +105,134 @@ namespace label_fusion_ros {
       info_msg->K[0], info_msg->K[1], info_msg->K[2],
       info_msg->K[3], info_msg->K[4], info_msg->K[5],
       info_msg->K[6], info_msg->K[7], info_msg->K[8];
-    // std::cout << "cam_K" << std::endl << cam_K << std::endl << std::endl;
 
-    // for (int frame_idx = 0; frame_idx < n_views; frame_idx++) {
-    for (int frame_idx = 0; frame_idx < 1; frame_idx++) {
-      // std::cout << "frame_idx : " << frame_idx << std::endl;
+    pcl::PointCloud<pcl::PointXYZRGB> cloud;
 
-      // mask file
-      cv::Mat mask = cv_bridge::toCvShare(mask_msg, "mono8")->image;
+    cv::Mat mask = cv_bridge::toCvShare(mask_msg, "mono8")->image;
 
-      cv::Mat depth;
-      if (use_depth_) {
-        depth = cv_bridge::toCvShare(depth_msg, depth_msg->encoding)->image;
-      }
+    cv::Mat depth;
+    if (use_depth_) {
+      depth = cv_bridge::toCvShare(depth_msg, depth_msg->encoding)->image;
+    }
 
-      // pose: world -> camera
-      // calculate cam_pose from transform_msg
-      float tx = transform_msg->transform.translation.x;
-      float ty = transform_msg->transform.translation.y;
-      float tz = transform_msg->transform.translation.z;
-      float rx = transform_msg->transform.rotation.x;
-      float ry = transform_msg->transform.rotation.y;
-      float rz = transform_msg->transform.rotation.z;
-      float rw = transform_msg->transform.rotation.w;
-      float r00 = 1 - 2*ry*ry - 2*rz*rz;
-      float r01 = 2*rx*ry - 2*rz*rw;
-      float r02 = 2*rx*rz + 2*ry*rw;
-      float r10 = 2*rx*ry + 2*rz*rw;
-      float r11 = 1 - 2*rx*rx - 2*rz*rz;
-      float r12 = 2*ry*rz - 2*rw*rx;
-      float r20 = 2*rx*rz - 2*ry*rw;
-      float r21 = 2*ry*rz + 2*rw*rx;
-      float r22 = 1 - 2*rx*rx - 2*ry*ry;
-      Eigen::Matrix4f cam_pose;
-      cam_pose <<
-        r00, r01, r02, tx,
-        r10, r11, r12, ty,
-        r20, r21, r22, tz,
-        0,   0,   0,   1;
-      // std::cout << "frame_idx : " << frame_idx << std::endl;
-      // std::cout << "cam_pose :" << std::endl << cam_pose << std::endl;
+    // cam_pose: world -> camera
+    float tx = transform_msg->transform.translation.x;
+    float ty = transform_msg->transform.translation.y;
+    float tz = transform_msg->transform.translation.z;
+    float rx = transform_msg->transform.rotation.x;
+    float ry = transform_msg->transform.rotation.y;
+    float rz = transform_msg->transform.rotation.z;
+    float rw = transform_msg->transform.rotation.w;
+    float r00 = 1 - 2*ry*ry - 2*rz*rz;
+    float r01 = 2*rx*ry - 2*rz*rw;
+    float r02 = 2*rx*rz + 2*ry*rw;
+    float r10 = 2*rx*ry + 2*rz*rw;
+    float r11 = 1 - 2*rx*rx - 2*rz*rz;
+    float r12 = 2*ry*rz - 2*rw*rx;
+    float r20 = 2*rx*rz - 2*ry*rw;
+    float r21 = 2*ry*rz + 2*rw*rx;
+    float r22 = 1 - 2*rx*rx - 2*ry*ry;
+    Eigen::Matrix4f cam_pose;
+    cam_pose <<
+      r00, r01, r02, tx,
+      r10, r11, r12, ty,
+      r20, r21, r22, tz,
+      0,   0,   0,   1;
 
-      // camera origin
-      Eigen::Vector4f origin_(0, 0, 0, 1);
-      origin_ = cam_pose * origin_;
-      Eigen::Vector3f origin(origin_(0), origin_(1), origin_(2));
+    // camera origin
+    Eigen::Vector4f origin_(0, 0, 0, 1);
+    origin_ = cam_pose * origin_;
+    Eigen::Vector3f origin(origin_(0), origin_(1), origin_(2));
 
-      // visualize camera origin
-      pcl::PointXYZRGB pt(255, 0, 0);
-      pt.x = origin(0);
-      pt.y = origin(1);
-      pt.z = origin(2);
-      cloud.push_back(pt);
+    // visualize camera origin
+    pcl::PointXYZRGB pt_red(255, 0, 0);
+    pt_red.x = origin(0);
+    pt_red.y = origin(1);
+    pt_red.z = origin(2);
+    cloud.push_back(pt_red);
 
-      octomap::KeySet occupied_cells;
-      octomap::KeySet unoccupied_cells;
+    octomap::KeySet occupied_cells;
+    octomap::KeySet unoccupied_cells;
 #pragma omp parallel for
-      for (int v = 0; v < mask.rows; v += ksize) {
-        for (int u = 0; u < mask.cols; u += ksize) {
-          float d = std::numeric_limits<float>::quiet_NaN();
-          if (use_depth_) {
-            d = depth.at<float>(v, u);
-          }
+    for (int v = 0; v < mask.rows; v += ksize) {
+      for (int u = 0; u < mask.cols; u += ksize) {
+        float d = std::numeric_limits<float>::quiet_NaN();
+        if (use_depth_) {
+          d = depth.at<float>(v, u);
+        }
 
-          Eigen::Vector3f uv(u, v, 1);
-          uv = cam_K.inverse() * uv;
-          Eigen::Vector4f direction_(uv(0), uv(1), uv(2), 1);  // with depth
-          Eigen::Vector4f direction_far_(direction_(0), direction_(1), direction_(2), 1);  // without depth
-          if (!std::isnan(d)) {
-            direction_(0) *= d;
-            direction_(1) *= d;
-            direction_(2) = d;
-          }
+        Eigen::Vector3f uv(u, v, 1);
+        uv = cam_K.inverse() * uv;
+        Eigen::Vector4f direction_(uv(0), uv(1), uv(2), 1);  // with depth
+        Eigen::Vector4f direction_far_(direction_(0), direction_(1), direction_(2), 1);  // without depth
+        if (!std::isnan(d)) {
+          direction_(0) *= d;
+          direction_(1) *= d;
+          direction_(2) = d;
+        }
 
-          direction_ = cam_pose * direction_;
-          direction_far_ = cam_pose * direction_far_;
-          Eigen::Vector3f direction(direction_(0), direction_(1), direction_(2));
-          Eigen::Vector3f direction_far(direction_far_(0), direction_far_(1), direction_far_(2));
+        direction_ = cam_pose * direction_;
+        direction_far_ = cam_pose * direction_far_;
+        Eigen::Vector3f direction(direction_(0), direction_(1), direction_(2));
+        Eigen::Vector3f direction_far(direction_far_(0), direction_far_(1), direction_far_(2));
 
-          // visualize ray direction
-          pcl::PointXYZRGB pt(0, 0, 255);
-          pt.x = direction_far(0);
-          pt.y = direction_far(1);
-          pt.z = direction_far(2);
+        // visualize ray direction
+        pcl::PointXYZRGB pt_blue(0, 0, 255);
+        pt_blue.x = direction_far(0);
+        pt_blue.y = direction_far(1);
+        pt_blue.z = direction_far(2);
 #pragma omp critical
-          cloud.push_back(pt);
+        cloud.push_back(pt_blue);
 
-          octomap::point3d pt_origin(origin(0), origin(1), origin(2));
-          octomap::point3d pt_direction(direction(0), direction(1), direction(2));
-          octomap::point3d pt_direction_far(direction_far(0), direction_far(1), direction_far(2));
-          if (mask.at<unsigned char>(v, u) > 127) {
-            octomap::KeyRay key_ray;
-            octree->computeRayKeys(pt_origin, pt_direction_far, key_ray);
+        octomap::point3d pt_origin(origin(0), origin(1), origin(2));
+        octomap::point3d pt_direction(direction(0), direction(1), direction(2));
+        octomap::point3d pt_direction_far(direction_far(0), direction_far(1), direction_far(2));
+        if (mask.at<unsigned char>(v, u) > 127) {
+          octomap::KeyRay key_ray;
+          octree->computeRayKeys(pt_origin, pt_direction_far, key_ray);
 #pragma omp critical
-            occupied_cells.insert(key_ray.begin(), key_ray.end());
-          }
-          if (!std::isnan(d)) {
-            octomap::KeyRay key_ray;
-            if (octree->computeRayKeys(pt_origin, pt_direction, key_ray)) {
+          occupied_cells.insert(key_ray.begin(), key_ray.end());
+        }
+        if (!std::isnan(d)) {
+          octomap::KeyRay key_ray;
+          if (octree->computeRayKeys(pt_origin, pt_direction, key_ray)) {
 #pragma omp critical
-              unoccupied_cells.insert(key_ray.begin(), key_ray.end());
-            }
+            unoccupied_cells.insert(key_ray.begin(), key_ray.end());
           }
         }
+      }  // for (int u = 0; ...)
+    }  // for (int v = 0; ...)
+
+    for (octomap::KeySet::iterator it = unoccupied_cells.begin(), end = unoccupied_cells.end(); it != end; ++it) {
+      octree->updateNode(*it, /*hit=*/false, /*reset=*/true);
+    }
+    for (octomap::KeySet::iterator it = occupied_cells.begin(), end = occupied_cells.end(); it != end; ++it) {
+      if (unoccupied_cells.find(*it) == unoccupied_cells.end()) {
+        octree->updateNode(*it, /*hit=*/true);
       }
-      for (octomap::KeySet::iterator it = unoccupied_cells.begin(), end = unoccupied_cells.end(); it != end; ++it) {
-        octree->updateNode(*it, /*hit=*/false, /*reset=*/true);
-      }
-      for (octomap::KeySet::iterator it = occupied_cells.begin(), end = occupied_cells.end(); it != end; ++it) {
-        if (unoccupied_cells.find(*it) == unoccupied_cells.end()) {
-          octree->updateNode(*it, /*hit=*/true);
-        }
-      }
-    } // for (int frame_idx = 0; ...)
+    }
 
     // visualize 3d segmentation
     octomap::point3d_list node_centers;
-    ROS_INFO("[MaskFusion] octree->size()          : %zu", octree->size());
     if (octree->size() != 0) {
       octree->getCentersMinHits(node_centers, static_cast<int>(threshold * n_views));
     }
     for (octomap::point3d_list::iterator it = node_centers.begin(), end = node_centers.end(); it != end; ++it) {
-      pcl::PointXYZRGB pt(0, 255, 0);
-      pt.x = (*it).x();
-      pt.y = (*it).y();
-      pt.z = (*it).z();
-      cloud.push_back(pt);
+      pcl::PointXYZRGB pt_green(0, 255, 0);
+      pt_green.x = (*it).x();
+      pt_green.y = (*it).y();
+      pt_green.z = (*it).z();
+      cloud.push_back(pt_green);
     }
+
     sensor_msgs::PointCloud2 output_cloud_msg;
     pcl::toROSMsg(cloud, output_cloud_msg);
+    output_cloud_msg.header = info_msg->header;
     output_cloud_msg.header.frame_id = frame_id_;
     pub_cloud_.publish(output_cloud_msg);
     cloud.clear();
   }
 
-} // namespace label_fusion_ros
+}  // namespace label_fusion_ros
 
 PLUGINLIB_EXPORT_CLASS(label_fusion_ros::MaskFusion, nodelet::Nodelet);
